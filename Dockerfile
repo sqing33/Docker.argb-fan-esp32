@@ -1,4 +1,4 @@
-FROM ghcr.io/sqing33/python3.13:alpine
+FROM python3.13:alpine
 
 WORKDIR /app
 
