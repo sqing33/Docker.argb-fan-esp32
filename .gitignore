@@ -1,0 +1,26 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local Windows-only artifacts (本机启动脚本/配置不进版本控制)
+start-argb.ps1
+stop-argb.ps1
+config/
+*.log
+
+# ESP32 / Arduino build artifacts
+build/
+*.bin
+*.elf

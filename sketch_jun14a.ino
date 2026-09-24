@@ -13,13 +13,19 @@ CRGB leds[NUM_LEDS];
 enum LedMode
 {
   STATIC,
-  GRADIENT
+  GRADIENT,
+  SEGMENTS
 };
 LedMode currentMode = STATIC;
 
 CRGB staticColor = CRGB::Black;
 CRGBPalette16 gradientPalette;
 uint8_t gradientSpeed = 100; // 默认速度
+
+// Segments mode: 把整圈 LED 按颜色数组等分, 最多 NUM_LEDS 段
+CRGB segmentColors[NUM_LEDS];
+uint8_t segmentCount = 0;
+uint8_t segmentOffset = 0;  // 起始 LED 偏移 (0..NUM_LEDS-1), 用于旋转
 
 void setup()
 {
@@ -97,6 +103,33 @@ void processCommand(String cmd)
         Serial.println("Mode: Gradient (speed updated only). OK.");
     }
   }
+  else if (strcmp(mode, "segments") == 0)
+  {
+    currentMode = SEGMENTS;
+    JsonArray colors = doc["colors"];
+    if (!colors.isNull()) {
+      int n = 0;
+      for (JsonVariant v : colors)
+      {
+        if (n >= NUM_LEDS) break;
+        const char *c = v.as<const char *>();
+        if (c) {
+          long num = strtol(&c[1], NULL, 16);
+          segmentColors[n++] = CRGB((num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF);
+        }
+      }
+      segmentCount = n;
+    }
+    // offset 可独立于 colors 更新
+    if (!doc["offset"].isNull()) {
+      segmentOffset = ((uint8_t)doc["offset"].as<int>()) % NUM_LEDS;
+    }
+    Serial.print("Mode: Segments (");
+    Serial.print(segmentCount);
+    Serial.print(" colors, offset ");
+    Serial.print(segmentOffset);
+    Serial.println("). OK.");
+  }
 }
 
 void loop()
@@ -116,12 +149,30 @@ void loop()
     break;
   case GRADIENT:
     static uint8_t startIndex = 0;
-    startIndex++; 
-    
+    startIndex++;
+
     fill_palette(leds, NUM_LEDS, startIndex, 255 / NUM_LEDS, gradientPalette, 255, LINEARBLEND);
-    
+
     FastLED.show();
-    delay(gradientSpeed); 
+    delay(gradientSpeed);
+    break;
+  case SEGMENTS:
+    if (segmentCount > 0) {
+      uint8_t perSeg = NUM_LEDS / segmentCount;       // 16 / 4 = 4 颗/段
+      // 先清零, 避免旧数据残留
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      // 环形填充: led[(s*perSeg + i + segmentOffset) % NUM_LEDS] = color[s]
+      for (uint8_t s = 0; s < segmentCount; s++) {
+        for (uint8_t i = 0; i < perSeg; i++) {
+          uint8_t idx = (uint8_t)(s * perSeg + i + segmentOffset) % NUM_LEDS;
+          leds[idx] = segmentColors[s];
+        }
+      }
+      // 不足整除的尾段 (perSeg*count < NUM_LEDS) 也已被前面的 s 覆盖 (s < count 时会填完 0..count*perSeg-1)
+      // 但如果 segmentCount > NUM_LEDS (已 clamp), 不会发生
+    }
+    FastLED.show();
+    delay(100);
     break;
   }
 }
